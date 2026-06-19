@@ -1,0 +1,17 @@
+# ClusterIP Service for the notification service.
+# Internal-only (the spec says only the gateway is publicly reachable). This exists
+# mainly so Prometheus and health checks can reach actuator on 8085.
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  labels:
+    app: notification-service
+spec:
+  type: ClusterIP
+  selector:
+    app: notification-service
+  ports:
+    - name: http
+      port: 8085
+      targetPort: http

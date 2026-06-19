@@ -1,0 +1,22 @@
+# Non-secret runtime configuration for the notification service.
+# These map to the `docker` Spring profile's in-network hostnames/topic names.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  labels:
+    app: notification-service
+data:
+  SPRING_PROFILES_ACTIVE: "docker"
+  # Datasource (host only; credentials come from the Secret).
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/securebank?currentSchema=notifications"
+  # Kafka broker (internal listener per spec).
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+  # RabbitMQ host.
+  SPRING_RABBITMQ_HOST: "rabbitmq"
+  SPRING_RABBITMQ_PORT: "5672"
+  # Topic / exchange / queue names.
+  SECUREBANK_KAFKA_TRANSACTIONS_TOPIC: "securebank.transactions"
+  SECUREBANK_RABBIT_EXCHANGE: "securebank.notifications.exchange"
+  SECUREBANK_RABBIT_QUEUE: "securebank.notifications.queue"
+  SECUREBANK_RABBIT_ROUTING_KEY: "notification.transaction.completed"

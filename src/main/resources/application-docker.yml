@@ -1,0 +1,22 @@
+# =============================================================================
+# `docker` profile — service hostnames as seen INSIDE the compose/k8s network.
+# Activate with SPRING_PROFILES_ACTIVE=docker (set in Dockerfile / k8s deployment).
+# Only the connection coordinates differ from the default profile.
+# =============================================================================
+spring:
+  datasource:
+    # `postgres` is the in-network service hostname.
+    url: jdbc:postgresql://postgres:5432/securebank?currentSchema=notifications
+    username: securebank
+    password: securebank
+
+  kafka:
+    # Per spec, Kafka is advertised internally as kafka:29092 (host port is 29092 too,
+    # but the broker's internal listener is what services connect to).
+    bootstrap-servers: kafka:29092
+
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest

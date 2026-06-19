@@ -1,0 +1,91 @@
+# =============================================================================
+# Default profile — local development (services reachable on localhost).
+# The `docker` profile (application-docker.yml) overrides the hostnames.
+# =============================================================================
+spring:
+  application:
+    name: securebank-notification-service
+
+  # JDK 21 virtual threads for the servlet container + @Async-ish work.
+  threads:
+    virtual:
+      enabled: true
+
+  # ---- PostgreSQL (schema: notifications) ----
+  datasource:
+    url: jdbc:postgresql://localhost:5432/securebank?currentSchema=notifications
+    username: securebank
+    password: securebank
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema; Hibernate must never auto-DDL it.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        # Pin the default schema so entities resolve to notifications.notifications.
+        default_schema: notifications
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    schemas: notifications
+    # Create the schema if it doesn't exist yet on a fresh database.
+    create-schemas: true
+    default-schema: notifications
+    locations: classpath:db/migration
+
+  # ---- Kafka (inbound: TransactionCompleted) ----
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: securebank-notification-service
+
+  # ---- RabbitMQ (outbound: delivery) ----
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+# Server port per platform spec.
+server:
+  port: 8085
+
+# ---- Service-specific settings (single source of truth for topic/queue names) ----
+securebank:
+  kafka:
+    transactions-topic: securebank.transactions
+  rabbit:
+    exchange: securebank.notifications.exchange
+    queue: securebank.notifications.queue
+    routing-key: notification.transaction.completed
+  notification:
+    # Default locale for rendered bodies until per-user locale lookup is added.
+    default-locale: en
+
+# ---- Actuator / observability ----
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose health (k8s probes) and prometheus (metrics scrape).
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# ---- springdoc / Swagger UI ----
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.securebank.notification: INFO

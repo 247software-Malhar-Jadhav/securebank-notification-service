@@ -1,0 +1,29 @@
+# CI for securebank-notification-service.
+#
+# Compiles the service and runs the unit tests on JDK 21. The localization test
+# exercises the Devanagari bundles; no broker/DB is required for the build because the
+# tests do not boot the full Spring context.
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # -B = batch mode (clean CI logs). package compiles + runs tests + builds the jar.
+      - name: Build and test
+        run: mvn -B package

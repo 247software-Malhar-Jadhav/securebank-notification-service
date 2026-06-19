@@ -1,0 +1,14 @@
+# Keep the Docker build context small and reproducible.
+target/
+.git/
+.github/
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+k8s/
+docs/
+*.md
+.DS_Store

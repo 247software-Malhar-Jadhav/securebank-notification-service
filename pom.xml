@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!--
+    securebank-notification-service
+    ===============================
+    The platform's purely EVENT-DRIVEN microservice. Unlike the other services it
+    speaks NO gRPC and exposes no business REST API. Its whole job is:
+
+        Kafka topic  securebank.transactions  (TransactionCompleted events)
+              │  consume
+              ▼
+        build a localized message (en/hi/mr) + persist a notifications-log row
+              │  publish
+              ▼
+        RabbitMQ exchange securebank.notifications.exchange
+              │  routed to
+              ▼
+        queue securebank.notifications.queue  ── consumed by NotificationDeliveryConsumer
+              │  "delivers" (currently logs) and marks the row DELIVERED.
+
+    It is two patterns stitched together: pub/sub (Observer) for the eventing, and
+    Strategy for the pluggable delivery channels (LogChannel today; Email/SMS/Push
+    tomorrow).
+  -->
+
+  <!--
+    We inherit from spring-boot-starter-parent so we get the curated, mutually
+    compatible dependency versions (Boot BOM) and the repackage plugin for free.
+  -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.3.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.securebank</groupId>
+  <artifactId>securebank-notification-service</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>SecureBank Notification Service</name>
+  <description>Event-driven notification service: Kafka consumer -&gt; RabbitMQ delivery.</description>
+
+  <properties>
+    <!-- Java 21 across the whole platform (virtual threads live here). -->
+    <java.version>21</java.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Pinned helper libs not managed by the Boot BOM. -->
+    <springdoc.version>2.6.0</springdoc.version>
+  </properties>
+
+  <dependencies>
+    <!--
+      Spring Web: we do NOT expose business REST endpoints, but we need the embedded
+      server so actuator/prometheus/swagger have somewhere to live, and so we can run
+      the Tomcat request-handling on virtual threads (spring.threads.virtual.enabled).
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Spring for Apache Kafka: the inbound side (consume TransactionCompleted). -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
+    <!-- Spring AMQP / RabbitMQ: the outbound delivery side (publish + consume). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-amqp</artifactId>
+    </dependency>
+
+    <!-- Spring Data JPA: persist the notifications log (an audit trail of every event). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+
+    <!-- Flyway: versioned schema migrations for the `notifications` schema. -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+
+    <!-- PostgreSQL JDBC driver (runtime only). -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- Bean Validation: validate inbound event DTOs before we act on them. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- Actuator: health/readiness probes for k8s + the metrics endpoint. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- Micrometer Prometheus registry: exposes /actuator/prometheus. -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- springdoc: OpenAPI + Swagger UI (for the actuator/management surface). -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
+    </dependency>
+
+    <!-- Lombok: boilerplate reduction (getters, builders, loggers). -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+
+    <!-- ===== Test scope ===== -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        Boot's repackage plugin produces the runnable fat jar. We tell it to exclude
+        Lombok from the final artifact (it is compile-only).
+      -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+
+      <!-- Keep Lombok off the generated-classes path during annotation processing. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
